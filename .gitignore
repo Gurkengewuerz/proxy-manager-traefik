@@ -15,4 +15,4 @@ yarn-error.log*
 
 traefik.yml
 
-./.idea
+.idea/
