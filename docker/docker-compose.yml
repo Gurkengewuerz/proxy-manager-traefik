@@ -1,0 +1,94 @@
+version: "3"
+
+services:
+  # TODO: add label and check configuration
+  # $VIRTUAL_HOST should be something like traefik.example.com
+  # Add default basic auth to traefik.
+  # Route PathPrefix /dashboard to traefik.
+  # Route PathPrefix /manager to Proxy Manager.
+  # Route PathPrefix /auth to OIDC.
+  traefik:
+    image: traefik:v2.6
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - "--api.insecure=false"
+      - "--api.dashboard=true"
+
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [traefik]
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certificates:/var/certificates
+    labels:
+      - "traefik.http.routers.traefik.rule=Host(`${VIRTUAL_HOST}`) && PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.traefik.middlewares=traefik-forward-auth"
+
+  manager:
+    image: gurken2108/traefik-proxy-manager:latest
+    restart: unless-stopped
+    networks: [traefik, manager]
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: traefikmanager
+      DB_USER: $DB_USER
+      DB_PASSWORD: $DB_PASSWORD
+      FRONTEND_URL: ${SCHEME}://${VIRTUAL_HOST}/manager
+      OIDC_CLIENT_ID: traefikmanager
+      OIDC_CLIENT_SECRET: $OIDC_CLIENT_SECRET
+      OIDC_CONFIG_URI: ${SCHEME}://${VIRTUAL_HOST}/auth
+    labels:
+      - "traefik.http.routers.manager.rule=Host(`${VIRTUAL_HOST}`) && PathPrefix(`/manager`)"
+
+  traefik-forward-auth:
+    image: thomseddon/traefik-forward-auth:2
+    environment:
+      DEFAULT_PROVIDER: oidc
+      PROVIDERS_OIDC_ISSUER_URL: ${SCHEME}://${VIRTUAL_HOST}/auth
+      PROVIDERS_OIDC_CLIENT_ID: traefikmanager
+      PROVIDERS_OIDC_CLIENT_SECRET: $OIDC_CLIENT_SECRET
+      SECRET: $AUTH_SECRET
+      INSECURE_COOKIE: true
+    labels:
+      - "traefik.http.middlewares.traefik-forward-auth.forwardauth.address=http://traefik-forward-auth:4181"
+      - "traefik.http.middlewares.traefik-forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.services.traefik-forward-auth.loadbalancer.server.port=4181"
+
+  db:
+    image: mariadb:10.7
+    restart: unless-stopped
+    networks: [manager]
+    volumes:
+      - ./data/db:/var/lib/mysql
+    environment:
+      MARIADB_USER: $DB_USER
+      MARIADB_PASSWORD: $DB_PASSWORD
+      MARIADB_DATABASE: traefikmanager
+
+  oidc:
+    image: qlik/simple-oidc-provider:latest
+    restart: unless-stopped
+    networks: [manager]
+    environment:
+      REDIRECTS: ${SCHEME}://${VIRTUAL_HOST}/manager/oidc/callback
+    labels:
+      - "traefik.http.routers.manager.rule=Host(`${VIRTUAL_HOST}`) && PathPrefix(`/auth`)"
+
+
+volumes:
+  certificates:
+
+networks:
+  manager:
+  traefik:
+    external: true
