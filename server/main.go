@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/caarlos0/env/v6"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -13,9 +12,10 @@ import (
 	"golang.org/x/oauth2"
 	"log"
 	"strings"
+	"traefikmanager/server/claims"
 	"traefikmanager/server/config"
 	"traefikmanager/server/database"
-	routes2 "traefikmanager/server/routes"
+	"traefikmanager/server/routes"
 	"traefikmanager/server/utils"
 )
 
@@ -35,10 +35,19 @@ func CheckOidc(c *fiber.Ctx) error {
 	}
 
 	ctx := context.Background()
-	_, err := verifier.Verify(ctx, parts[1])
+	idToken, err := verifier.Verify(ctx, parts[1])
 	if err != nil {
 		return c.SendStatus(401)
 	}
+
+	resp := struct {
+		IDTokenClaims *claims.IDTokenClaims
+	}{}
+
+	if err := idToken.Claims(&resp.IDTokenClaims); err != nil {
+		return c.Status(500).SendString("No claims found " + err.Error())
+	}
+	c.Locals("claims", resp.IDTokenClaims)
 
 	return c.Next()
 }
@@ -82,8 +91,8 @@ func LoginCallback(c *fiber.Ctx) error {
 
 	resp := struct {
 		OAuth2Token   *oauth2.Token
-		IDTokenClaims *json.RawMessage // ID Token payload is just JSON.
-	}{oauth2Token, new(json.RawMessage)}
+		IDTokenClaims *claims.IDTokenClaims
+	}{oauth2Token, new(claims.IDTokenClaims)}
 
 	if err := idToken.Claims(&resp.IDTokenClaims); err != nil {
 		return c.Status(500).SendString("No claims found " + err.Error())
@@ -93,21 +102,23 @@ func LoginCallback(c *fiber.Ctx) error {
 }
 
 func setUpRoutes(app *fiber.App) {
-	app.Get("/config", CheckOidc, routes2.GenerateConfig)
-	app.Get("/commit", CheckOidc, routes2.Commit)
-	app.Get("/stats", CheckOidc, routes2.Stats)
+	app.Get("/config", CheckOidc, routes.GenerateConfig)
+	app.Get("/commit", CheckOidc, routes.Commit)
+	app.Get("/stats", CheckOidc, routes.Stats)
 
-	app.Get("/router", CheckOidc, routes2.GetRouter)
-	app.Post("/router", CheckOidc, routes2.PostRouter)
-	app.Put("/router", CheckOidc, routes2.PutRouter)
-	app.Delete("/router", CheckOidc, routes2.DeleteRouter)
+	app.Get("/router", CheckOidc, routes.GetRouter)
+	app.Post("/router", CheckOidc, routes.PostRouter)
+	app.Put("/router", CheckOidc, routes.PutRouter)
+	app.Delete("/router", CheckOidc, routes.DeleteRouter)
 
-	app.Get("/middleware", CheckOidc, routes2.GetMiddleware)
-	app.Post("/middleware", CheckOidc, routes2.PostMiddleware)
-	app.Put("/middleware", CheckOidc, routes2.PutMiddleware)
-	app.Delete("/middleware", CheckOidc, routes2.DeleteMiddleware)
+	app.Get("/middleware", CheckOidc, routes.GetMiddleware)
+	app.Post("/middleware", CheckOidc, routes.PostMiddleware)
+	app.Put("/middleware", CheckOidc, routes.PutMiddleware)
+	app.Delete("/middleware", CheckOidc, routes.DeleteMiddleware)
 
-	app.Get("/audit", CheckOidc, routes2.GetAudit)
+	app.Get("/audit", CheckOidc, routes.GetAudit)
+
+	app.Get("/auth/info", CheckOidc, routes.AuthInfoMiddleware)
 
 	app.Get("/login", RedirectLogin)
 	app.Get("/oidc/callback", LoginCallback)
@@ -136,7 +147,7 @@ func main() {
 	oauth2Config = oauth2.Config{
 		ClientID:     cfg.OidcClientID,
 		ClientSecret: cfg.OidcClientSecret,
-		RedirectURL:  fmt.Sprintf("%s/oidc/callback", cfg.FrontendUrl),
+		RedirectURL:  fmt.Sprintf("%s/oidc/callback", cfg.BackendURL),
 		Endpoint:     provider.Endpoint(),
 		Scopes:       strings.Split(cfg.OidcScopes, " "),
 	}
@@ -148,9 +159,9 @@ func main() {
 	database.ConnectDb(&cfg)
 	app := fiber.New()
 
-	setUpRoutes(app)
-
 	app.Use(cors.New())
+
+	setUpRoutes(app)
 
 	app.Use(func(c *fiber.Ctx) error {
 		return c.Status(404).SendString("404 Not Found")

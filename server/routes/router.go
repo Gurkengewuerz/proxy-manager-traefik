@@ -3,6 +3,7 @@ package routes
 import (
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
+	"traefikmanager/server/claims"
 	"traefikmanager/server/database"
 	models2 "traefikmanager/server/models"
 )
@@ -30,12 +31,13 @@ func PostRouter(c *fiber.Ctx) error {
 
 	database.DBConn.Create(&jsonRouter)
 
+	userClaims := c.Locals("claims").(*claims.IDTokenClaims)
 	jsonData, jsonErr := json.Marshal(map[string]string{
 		"name": jsonRouter.Name,
 	})
 	if jsonErr == nil {
 		database.DBConn.Create(&models2.LogEntry{
-			User:     "",
+			User:     userClaims.Username,
 			Action:   models2.LogActionCreateRouter,
 			Metadata: string(jsonData),
 		})
@@ -52,12 +54,13 @@ func DeleteRouter(c *fiber.Ctx) error {
 	}
 	database.DBConn.Where("id = ?", jsonRouter.ID).Delete(&routers)
 
+	userClaims := c.Locals("claims").(*claims.IDTokenClaims)
 	jsonData, jsonErr := json.Marshal(map[string]string{
 		"name": jsonRouter.Name,
 	})
 	if jsonErr == nil {
 		database.DBConn.Create(&models2.LogEntry{
-			User:     "",
+			User:     userClaims.Username,
 			Action:   models2.LogActionDeleteRouter,
 			Metadata: string(jsonData),
 		})

@@ -35,9 +35,10 @@ var translationKeys = map[LogAction]string{
 type LogEntry struct {
 	gorm.Model
 
-	User     string    `json:"user"`
-	Action   LogAction `json:"action"`
-	Metadata string    `json:"metadata"`
+	User       string    `json:"user"`
+	Action     LogAction `json:"action"`
+	Metadata   string    `json:"metadata"`
+	Translated string    `json:"translated"`
 }
 
 func (logEntry *LogEntry) Translate() string {

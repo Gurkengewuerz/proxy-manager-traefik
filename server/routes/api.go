@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gofiber/fiber/v2"
 	"os"
+	"traefikmanager/server/claims"
 	"traefikmanager/server/database"
 	"traefikmanager/server/models"
 	"traefikmanager/server/traefik"
@@ -23,8 +24,9 @@ func Commit(c *fiber.Ctx) error {
 		return c.Status(500).SendString("Failed to generate config")
 	}
 
+	userClaims := c.Locals("claims").(*claims.IDTokenClaims)
 	database.DBConn.Create(&models.LogEntry{
-		User:     "",
+		User:     userClaims.Username,
 		Action:   models.LogActionCommit,
 		Metadata: "{}",
 	})

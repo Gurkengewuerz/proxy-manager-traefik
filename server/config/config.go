@@ -10,6 +10,7 @@ type Config struct {
 	DatabasePassword string `env:"DB_PASSWORD"`
 
 	FrontendUrl string `env:"FRONTEND_URL" envDefault:"http://localhost"`
+	BackendURL  string `env:"BACKEND_URL" envDefault:"http://localhost"`
 
 	OidcClientID      string `env:"OIDC_CLIENT_ID"`
 	OidcClientSecret  string `env:"OIDC_CLIENT_SECRET"`

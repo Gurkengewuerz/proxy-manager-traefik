@@ -1,4 +1,4 @@
-const comp = () => {
+const Comp = () => {
   return <div className="empty">
     <div className="empty-header">500</div>
     <p className="empty-title">Oops… You just found an error page</p>
@@ -8,4 +8,4 @@ const comp = () => {
   </div>
 }
 
-export default comp;
+export default Comp;

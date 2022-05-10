@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"strconv"
+	"traefikmanager/server/claims"
 	"traefikmanager/server/database"
 	models2 "traefikmanager/server/models"
 )
@@ -31,12 +32,13 @@ func PostMiddleware(c *fiber.Ctx) error {
 
 	database.DBConn.Create(&jsonMiddleware)
 
+	userClaims := c.Locals("claims").(*claims.IDTokenClaims)
 	jsonData, jsonErr := json.Marshal(map[string]string{
 		"type": string(rune(jsonMiddleware.Type)),
 	})
 	if jsonErr == nil {
 		database.DBConn.Create(&models2.LogEntry{
-			User:     "",
+			User:     userClaims.Username,
 			Action:   models2.LogActionCreateMiddleware,
 			Metadata: string(jsonData),
 		})
@@ -53,13 +55,14 @@ func DeleteMiddleware(c *fiber.Ctx) error {
 	}
 	database.DBConn.Where("id = ?", jsonMiddleware.ID).Delete(&middlewares)
 
+	userClaims := c.Locals("claims").(*claims.IDTokenClaims)
 	jsonData, jsonErr := json.Marshal(map[string]string{
 		"id":   strconv.Itoa(int(jsonMiddleware.ID)),
 		"type": string(rune(jsonMiddleware.Type)),
 	})
 	if jsonErr == nil {
 		database.DBConn.Create(&models2.LogEntry{
-			User:     "",
+			User:     userClaims.Username,
 			Action:   models2.LogActionDeleteMiddleware,
 			Metadata: string(jsonData),
 		})
